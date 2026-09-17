@@ -52,7 +52,7 @@ The iOS audio path activates a `.playAndRecord` / `.voiceChat` audio session; co
 ownership with any other audio components in your app. This release does not implement
 CallKit or background-call lifecycle support.
 
-The [Mac example](Examples/MacVoice/main.swift) includes a native SwiftUI call screen,
+The [Mac example](Examples/MacVoice/MacVoiceApp.swift) includes a native SwiftUI call screen,
 mute control, transcripts and a harmless example tool. Package it with your app's
 Info.plist and signing settings; running a bare executable is not a substitute for
 microphone permissions in an app bundle.

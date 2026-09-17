@@ -6,31 +6,30 @@ import Testing
     var closeCode: Int?
     var sent: [WireMessage] = []
     var closed = false
-    private let stream: AsyncThrowingStream<WireMessage, any Error>
-    private let continuation: AsyncThrowingStream<WireMessage, any Error>.Continuation
-    private var iterator: AsyncThrowingStream<WireMessage, any Error>.Iterator
-    init() {
-        let pair = AsyncThrowingStream<WireMessage, any Error>.makeStream()
-        stream = pair.stream; continuation = pair.continuation; iterator = stream.makeAsyncIterator()
-    }
+    private var queued: [WireMessage] = []
+    private var waiter: CheckedContinuation<WireMessage, any Error>?
     func send(_ message: WireMessage) async throws {
         if closed { throw URLError(.networkConnectionLost) }
         sent.append(message)
     }
     func receive() async throws -> WireMessage {
-        var it = iterator
-        guard let value = try await it.next() else { throw URLError(.networkConnectionLost) }
-        iterator = it
-        return value
+        if !queued.isEmpty { return queued.removeFirst() }
+        if closed { throw URLError(.networkConnectionLost) }
+        return try await withCheckedThrowingContinuation { waiter = $0 }
     }
-    func close() { closed = true; continuation.finish() }
-    func push(_ frame: [String: JSONValue]) { continuation.yield(.text(try! DialtSession.encode(frame))) }
-    func audio(_ data: Data) { continuation.yield(.binary(data)) }
+    func close() { closed = true; waiter?.resume(throwing: URLError(.networkConnectionLost)); waiter = nil }
+    private func yield(_ message: WireMessage) {
+        guard !closed else { return }
+        if let pending = waiter { waiter = nil; pending.resume(returning: message) }
+        else { queued.append(message) }
+    }
+    func push(_ frame: [String: JSONValue]) { yield(.text(try! DialtSession.encode(frame))) }
+    func audio(_ data: Data) { yield(.binary(data)) }
     func ready(token: String = "resume-one", encoding: String = "pcm16", rate: Int = 16000) {
         push(["type": "ready", "resume_token": .string(token), "session_uuid": "server-uuid",
               "audio": ["output_encoding": .string(encoding), "output_sr": .number(Double(rate))]])
     }
-    func disconnect(code: Int = 1006) { closeCode = code; continuation.finish(throwing: URLError(.networkConnectionLost)) }
+    func disconnect(code: Int = 1006) { closeCode = code; close() }
     var frames: [[String: JSONValue]] { sent.compactMap { if case .text(let s) = $0 { return try? JSONDecoder().decode([String: JSONValue].self, from: Data(s.utf8)) }; return nil } }
 }
 
