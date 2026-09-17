@@ -30,6 +30,9 @@ import Foundation
     private var capture: CaptureProcessor?
     private var scheduledBuffers = 0
     private var playbackEpoch = 0
+    #if os(iOS)
+    private var activatedAudioSession = false
+    #endif
 
     /// Disable voiceProcessing only for controlled A/B diagnostics or an external AEC path.
     public init(voiceProcessing: Bool = true) {
@@ -58,6 +61,7 @@ import Foundation
             try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
             try session.setPreferredIOBufferDuration(0.01)
             try session.setActive(true)
+            activatedAudioSession = true
             #endif
             let input = engine.inputNode
             // Enable before querying the format: VPIO can change the hardware graph format.
@@ -160,7 +164,10 @@ import Foundation
         engine.stop(); capture = nil; voiceProcessingEnabled = false
         continuation.finish()
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if activatedAudioSession {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            activatedAudioSession = false
+        }
         #endif
     }
 }

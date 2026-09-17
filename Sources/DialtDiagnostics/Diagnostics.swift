@@ -41,30 +41,33 @@ import AVFoundation
     }
 
     @MainActor static func audioCheck() async throws {
+        @MainActor final class CaptureCheck {
+            var packets = 0
+            var checkMute = false
+            var mutedPackets = 0
+            var nonzeroMutedPackets = 0
+        }
         let audio = NativeAudioEngine()
         defer { audio.stop() }
         try await audio.start()
-        var packets = 0
-        var checkMute = false
-        var mutedPackets = 0
-        var nonzeroMutedPackets = 0
+        let check = CaptureCheck()
         let capture = Task { @MainActor in
             for try await packet in audio.microphone {
-                packets += 1
-                if checkMute {
-                    mutedPackets += 1
-                    if packet.contains(where: { $0 != 0 }) { nonzeroMutedPackets += 1 }
+                check.packets += 1
+                if check.checkMute {
+                    check.mutedPackets += 1
+                    if packet.contains(where: { $0 != 0 }) { check.nonzeroMutedPackets += 1 }
                 }
             }
         }
         defer { capture.cancel() }
         try await Task.sleep(for: .seconds(1))
-        guard packets >= 10, audio.voiceProcessingEnabled else { throw DialtError("capture_missing", "Native AEC capture did not produce paced frames.") }
+        guard check.packets >= 10, audio.voiceProcessingEnabled else { throw DialtError("capture_missing", "Native AEC capture did not produce paced frames.") }
         audio.setMuted(true)
         try await Task.sleep(for: .milliseconds(250))
-        checkMute = true
+        check.checkMute = true
         try await Task.sleep(for: .milliseconds(500))
-        guard mutedPackets >= 5, nonzeroMutedPackets == 0 else { throw DialtError("mute_failed", "Muted microphone did not emit silence.") }
+        guard check.mutedPackets >= 5, check.nonzeroMutedPackets == 0 else { throw DialtError("mute_failed", "Muted microphone did not emit silence.") }
         // Queue silence: this checks real renderer accounting without adding room noise.
         try audio.enqueue(Data(repeating: 0, count: 32000))
         guard audio.snapshot().pendingMilliseconds > 500 else { throw DialtError("playback_failed", "Queued playback was not accounted for.") }

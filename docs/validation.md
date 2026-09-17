@@ -2,8 +2,9 @@
 
 Local validation performed 2026-09-17 on an Apple Silicon MacBook Pro, macOS 26.2,
 using built-in microphone and speakers. Swift 6 language mode; local compiler 6.2.3.
-CI uses Xcode 16.4 and runs both macOS and iPhone simulator tests. Check the PR's
-current Actions results before merging; local results do not substitute for CI.
+CI uses Xcode 16.4; both macOS and iPhone simulator tests passed on the validation PR.
+Check the PR's current Actions results before merging; local results do not substitute
+for CI.
 
 | Check | Result | Scope | Required resources | Purpose | Execution |
 | --- | --- | --- | --- | --- | --- |
