@@ -2,7 +2,7 @@ import Foundation
 
 enum WireMessage: Sendable { case text(String), binary(Data) }
 
-@MainActor protocol DialtTransport: AnyObject {
+@MainActor protocol DialtTransport: AnyObject, Sendable {
     var closeCode: Int? { get }
     func send(_ message: WireMessage) async throws
     func receive() async throws -> WireMessage

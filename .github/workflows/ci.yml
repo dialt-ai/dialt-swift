@@ -20,4 +20,4 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
       - name: Test on iPhone simulator
-        run: xcodebuild -scheme Dialt -destination 'platform=iOS Simulator,name=iPhone 16' -derivedDataPath .build/ios test CODE_SIGNING_ALLOWED=NO
+        run: xcodebuild -scheme dialt-swift-Package -destination 'platform=iOS Simulator,name=iPhone 16' -derivedDataPath .build/ios test CODE_SIGNING_ALLOWED=NO
