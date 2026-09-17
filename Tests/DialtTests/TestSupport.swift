@@ -6,9 +6,11 @@ import Testing
     var closeCode: Int?
     var sent: [WireMessage] = []
     var closed = false
+    var failNextSend = false
     private var queued: [WireMessage] = []
     private var waiter: CheckedContinuation<WireMessage, any Error>?
     func send(_ message: WireMessage) async throws {
+        if failNextSend { failNextSend = false; throw URLError(.networkConnectionLost) }
         if closed { throw URLError(.networkConnectionLost) }
         sent.append(message)
     }
@@ -17,7 +19,7 @@ import Testing
         if closed { throw URLError(.networkConnectionLost) }
         return try await withCheckedThrowingContinuation { waiter = $0 }
     }
-    func close() { closed = true; waiter?.resume(throwing: URLError(.networkConnectionLost)); waiter = nil }
+    func close() { closeCode = closeCode ?? 1000; closed = true; waiter?.resume(throwing: URLError(.networkConnectionLost)); waiter = nil }
     private func yield(_ message: WireMessage) {
         guard !closed else { return }
         if let pending = waiter { waiter = nil; pending.resume(returning: message) }

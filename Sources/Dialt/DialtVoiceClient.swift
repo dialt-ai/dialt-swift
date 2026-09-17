@@ -12,7 +12,6 @@ import Foundation
     private var closed = false
     private var connecting = false
     private var responding = false
-    private var reconnecting = false
 
     public convenience init(configuration: DialtConfiguration) {
         self.init(configuration: configuration, audio: NativeAudioEngine(), factory: { WebSocketTransport(url: $0) })
@@ -31,7 +30,9 @@ import Foundation
         connecting = true
         defer { connecting = false }
         do {
+            try session.validateForVoice()
             try await audio.start()
+            session.audioFrontend = audio.voiceProcessingEnabled ? "apple-voice-processing" : "unknown"
             guard !closed else { throw CancellationError() }
             micTask = Task { [weak self, audio, session] in
                 do {
@@ -82,10 +83,12 @@ import Foundation
                 "discarded_ms": .number(clear ? snapshot.pendingMilliseconds : 0)
             ]
             if let sequence = event["barge_seq"] { fields["barge_seq"] = sequence }
-            try await session.sendControl(type: "client_event", fields: fields)
+            do { try await session.sendControl(type: "client_event", fields: fields) }
+            catch let error as DialtError where error.code == "reconnecting" {
+                // A report for a lost connection is stale; recovery clears its playback.
+            }
         case "reconnecting":
-            reconnecting = true; responding = false; audio.clearPlayback()
-        case "reconnected": reconnecting = false
+            responding = false; audio.clearPlayback()
         default: break
         }
     }

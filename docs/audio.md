@@ -1,7 +1,10 @@
 # Native audio and AEC
 
 The native path deliberately uses one `AVAudioEngine` for capture and assistant playback.
-Voice processing is enabled before inspecting the input format. Apple's input/output
+Voice processing is enabled before inspecting the input format. The capture tap and
+mixer-to-output connection use matching mono formats at the input hardware rate.
+Leaving output stereo while configuring a mono input reproduced CoreAudio `-10875`
+on the tested Mac. Apple's input/output
 voice-processing nodes must both report enabled; a failure does not fall back to an
 uncancelled microphone. The input is never connected to the speaker as a monitor.
 
@@ -41,6 +44,10 @@ This is a local engineering acceptance threshold, not a claimed industry benchma
 The initial convergence interval is excluded. The reported reduction includes Apple's
 noise suppression and differences between takes; it is not a pure ERLE measurement.
 All artifacts are ignored by Git. No audio is uploaded by this command.
+
+`dialt-diagnostics audio-check` separately exercises live capture, paced muted silence,
+playback queue accounting, clearing playback and microphone shutdown. It uploads and
+saves no microphone audio.
 
 ## Required device checks before a production release
 

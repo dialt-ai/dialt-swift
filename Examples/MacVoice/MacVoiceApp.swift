@@ -26,10 +26,12 @@ import Dialt
         let voice = DialtVoiceClient(configuration: config)
         client = voice
         task = Task { [weak self] in
+            var finalStatus = "Call ended"
             do {
                 try await voice.connect()
                 self?.status = "Listening"; voice.setMuted(self?.muted ?? false)
                 for try await event in voice.events {
+                    guard self?.client === voice else { break }
                     if ["asr", "utterance"].contains(event.type), let text = event["text"]?.string {
                         self?.append("\(event.type == "asr" ? "You" : "Dialt"): \(text)")
                     }
@@ -41,10 +43,11 @@ import Dialt
                     if event.type == "reconnecting" { self?.status = "Reconnecting…" }
                     if event.type == "reconnected" { self?.status = "Listening" }
                 }
-                self?.status = "Call ended"
-            } catch is CancellationError { self?.status = "Stopped" }
-            catch { self?.status = error.localizedDescription }
-            voice.close(); self?.active = false
+            } catch is CancellationError { finalStatus = "Stopped" }
+            catch { finalStatus = error.localizedDescription }
+            voice.close()
+            guard self?.client === voice else { return }
+            self?.status = finalStatus; self?.active = false; self?.client = nil; self?.task = nil
         }
     }
     func append(_ line: String) { lines.append(line); if lines.count > 200 { lines.removeFirst() } }

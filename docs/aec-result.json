@@ -1,0 +1,41 @@
+{
+  "mean_reduction_db" : 36.05407549463068,
+  "passed" : true,
+  "raw_echo_above_noise" : true,
+  "scope" : "This measures far-end attenuation including noise suppression. It does not certify double-talk, ASR quality, Bluetooth or iOS.",
+  "takes" : [
+    {
+      "aec" : false,
+      "capture_samples" : 241280,
+      "confirmed_enabled" : false,
+      "noise_rms_dbfs" : -52.312453574950275,
+      "speech_rms_dbfs" : -15.980035161635568,
+      "take" : 1
+    },
+    {
+      "aec" : true,
+      "capture_samples" : 239360,
+      "confirmed_enabled" : true,
+      "noise_rms_dbfs" : -62.73222248428884,
+      "speech_rms_dbfs" : -54.99459267829042,
+      "take" : 2
+    },
+    {
+      "aec" : true,
+      "capture_samples" : 239360,
+      "confirmed_enabled" : true,
+      "noise_rms_dbfs" : -64.25504579649251,
+      "speech_rms_dbfs" : -48.803394834873345,
+      "take" : 3
+    },
+    {
+      "aec" : false,
+      "capture_samples" : 241280,
+      "confirmed_enabled" : false,
+      "noise_rms_dbfs" : -51.951018106369695,
+      "speech_rms_dbfs" : -15.709801362266838,
+      "take" : 4
+    }
+  ],
+  "test" : "local acoustic far-end-only A\/B"
+}

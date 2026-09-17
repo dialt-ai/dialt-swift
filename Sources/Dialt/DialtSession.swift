@@ -8,9 +8,9 @@ import Foundation
     public private(set) var sessionUUID: String?
     public let events: AsyncThrowingStream<DialtEvent, any Error>
     private let continuation: AsyncThrowingStream<DialtEvent, any Error>.Continuation
-    private var configuration: DialtConfiguration
+    private let configuration: DialtConfiguration
     private let factory: @MainActor (URL) -> any DialtTransport
-    private let audioFrontend: String
+    var audioFrontend: String
     private var wire: (any DialtTransport)?
     private var reader: Task<Void, Never>?
     private var generation = 0
@@ -44,6 +44,11 @@ import Foundation
     }
 
     public func close() { finish(error: nil) }
+
+    func validateForVoice() throws {
+        try configuration.validate()
+        guard configuration.modality == .voice else { throw DialtError("wrong_modality", "Use DialtSession for text-only sessions.") }
+    }
 
     private func finish(error: (any Error)?) {
         guard state != .closed else { return }
@@ -124,7 +129,7 @@ import Foundation
                 if error is DialtError || error is DecodingError {
                     finish(error: error); return
                 }
-                if current.closeCode == 1000 {
+                if current.closeCode == 1000, state != .reconnecting {
                     try? emit(DialtEvent(type: "session_end", fields: ["code": 1000]))
                     finish(error: nil); return
                 }
@@ -171,7 +176,11 @@ import Foundation
         }
         if state == .reconnecting { return }
         guard !pcm16.isEmpty else { return }
-        try await send(.binary(pcm16))
+        do { try await send(.binary(pcm16)) }
+        catch let error as DialtError where error.code == "reconnecting" {
+            // The reader owns recovery. Lost microphone frames must not end the call
+            // or be replayed after the connection resumes.
+        }
     }
 
     public func sendText(_ text: String) async throws {
@@ -213,7 +222,20 @@ import Foundation
             throw DialtError(state == .reconnecting ? "reconnecting" : "connection_closed", "Session is not live.", retryable: state == .reconnecting)
         }
         let epoch = generation
-        try await current.send(message)
+        do { try await current.send(message) }
+        catch {
+            try check(epoch)
+            guard !(error is CancellationError), !(error is DialtError) else { throw error }
+            if configuration.autoReconnect, let token = resumeToken, !token.isEmpty {
+                if wire === current {
+                    state = .reconnecting
+                    current.close() // Wake receive(); its single reader performs recovery.
+                }
+                throw DialtError("reconnecting", "Send failed; session recovery is in progress. The frame was not replayed.", retryable: true)
+            }
+            finish(error: error)
+            throw error
+        }
         try check(epoch)
     }
 
