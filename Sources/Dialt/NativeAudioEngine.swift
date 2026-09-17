@@ -70,15 +70,19 @@ import Foundation
                 input.isVoiceProcessingAGCEnabled = false
                 input.isVoiceProcessingBypassed = false
             }
-            let inputFormat = input.outputFormat(forBus: 0)
-            guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+            let hardwareFormat = input.outputFormat(forBus: 0)
+            guard hardwareFormat.sampleRate > 0, hardwareFormat.channelCount > 0,
+                  let inputFormat = AVAudioFormat(standardFormatWithSampleRate: hardwareFormat.sampleRate, channels: 1) else {
                 throw DialtError("audio_unavailable", "No microphone input format is available.")
             }
             engine.attach(player)
             engine.connect(player, to: engine.mainMixerNode, format: format)
+            // VPIO's capture and render client formats must match. Its reported input
+            // can include aggregate/reference channels; do not downmix those as speech.
+            engine.connect(engine.mainMixerNode, to: engine.outputNode, format: inputFormat)
             let processor = try CaptureProcessor(inputFormat: inputFormat, continuation: continuation)
             capture = processor
-            input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { buffer, _ in processor.process(buffer) }
+            input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { @Sendable buffer, _ in processor.process(buffer) }
             tapInstalled = true
             engine.prepare(); try engine.start(); player.play()
             guard engine.isRunning else { throw DialtError("audio_unavailable", "Audio engine did not start.") }
@@ -122,7 +126,7 @@ import Foundation
         let start = timeline.schedule(frames: samples.count, cursor: cursor, lead: lead)
         let epoch = playbackEpoch
         scheduledBuffers += 1
-        player.scheduleBuffer(buffer, at: AVAudioTime(sampleTime: start, atRate: 16_000), options: [], completionCallbackType: .dataPlayedBack) { [weak self] _ in
+        player.scheduleBuffer(buffer, at: AVAudioTime(sampleTime: start, atRate: 16_000), options: [], completionCallbackType: .dataPlayedBack) { @Sendable [weak self] _ in
             Task { @MainActor in
                 guard let self, self.playbackEpoch == epoch else { return }
                 self.scheduledBuffers -= 1
@@ -180,11 +184,11 @@ final class CaptureProcessor: @unchecked Sendable {
     func process(_ input: AVAudioPCMBuffer) {
         let capacity = AVAudioFrameCount(ceil(Double(input.frameLength) * 16_000 / input.format.sampleRate) + 32)
         guard let output = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else { return }
-        var consumed = false
+        let source = ConverterInput(input)
         var error: NSError?
         let status = converter.convert(to: output, error: &error) { _, status in
-            if consumed { status.pointee = .noDataNow; return nil }
-            consumed = true; status.pointee = .haveData; return input
+            guard let buffer = source.take() else { status.pointee = .noDataNow; return nil }
+            status.pointee = .haveData; return buffer
         }
         guard status != .error, error == nil, let channel = output.floatChannelData?[0] else {
             continuation.finish(throwing: DialtError("audio_conversion", "Microphone conversion failed.")); return
@@ -199,6 +203,21 @@ final class CaptureProcessor: @unchecked Sendable {
             if case .dropped = continuation.yield(packet) {
                 continuation.finish(throwing: DialtError("capture_overflow", "Microphone uploader fell behind.")); return
             }
+        }
+    }
+}
+
+/// AVAudioConverter requests this immutable buffer synchronously. The lock makes the
+/// one-shot supply explicit even with the API's Sendable input-block annotation.
+private final class ConverterInput: @unchecked Sendable {
+    private let buffer: AVAudioPCMBuffer
+    private let lock = NSLock()
+    private var consumed = false
+    init(_ buffer: AVAudioPCMBuffer) { self.buffer = buffer }
+    func take() -> AVAudioPCMBuffer? {
+        lock.withLock {
+            guard !consumed else { return nil }
+            consumed = true; return buffer
         }
     }
 }

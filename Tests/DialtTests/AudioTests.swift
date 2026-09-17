@@ -44,6 +44,28 @@ struct PCMTests {
 }
 
 @Suite @MainActor struct VoiceTests {
+    @Test func microphoneSendFailureResumesWithoutStoppingCapture() async throws {
+        let first = MockWire(); first.ready()
+        let second = MockWire()
+        var wires = [first, second]
+        let audio = FakeAudio()
+        let client = DialtVoiceClient(configuration: .init(apiKey: "test"), audio: audio, factory: { _ in wires.removeFirst() })
+        defer { client.close() }
+        try await client.connect()
+        first.failNextSend = true
+        audio.continuation.yield(Data([1, 0]))
+        try await eventually { client.session.state != .live }
+        #expect(client.session.state == .reconnecting)
+        #expect(!audio.stopped)
+        guard client.session.state == .reconnecting else { return }
+        try await eventually { !second.frames.isEmpty }
+        second.ready()
+        try await eventually { client.session.state == .live }
+        audio.continuation.yield(Data([2, 0]))
+        try await eventually { second.sent.count == 2 }
+        #expect(second.sent.count == 2) // Only start + new mic audio; failed audio is never replayed.
+    }
+
     @Test func interruptClearReportsDiscardAndDrainRetainsQueue() async throws {
         let wire = MockWire(); wire.ready()
         let audio = FakeAudio()
@@ -64,6 +86,25 @@ struct PCMTests {
         #expect(wire.frames.last?["discarded_ms"] == 0)
         #expect(wire.frames.last?["remaining_ms"] == 270)
         #expect(audio.clearCount == 1)
+    }
+
+    @Test func lostPlaybackReportDoesNotPreventRecovery() async throws {
+        let first = MockWire(); first.ready()
+        let second = MockWire()
+        var wires = [first, second]
+        let audio = FakeAudio()
+        let client = DialtVoiceClient(configuration: .init(apiKey: "test"), audio: audio, factory: { _ in wires.removeFirst() })
+        defer { client.close() }
+        try await client.connect()
+        first.failNextSend = true
+        first.push(["type": "interrupted", "clear": true, "barge_seq": 3])
+        try await eventually { client.session.state != .live }
+        #expect(client.session.state == .reconnecting)
+        #expect(!audio.stopped)
+        guard client.session.state == .reconnecting else { return }
+        second.ready()
+        try await eventually { client.session.state == .live }
+        #expect(second.frames.count == 1)
     }
 
     @Test func cancellationClearsAndDeviceFailureClosesSession() async throws {

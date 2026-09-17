@@ -28,6 +28,7 @@ let voice = DialtVoiceClient(configuration: DialtConfiguration(
     sessionID: credential.sessionID,
     mode: ["instructions": "Help the caller with their questions."]
 ))
+defer { voice.close() }
 try await voice.connect()
 for try await event in voice.events {
     switch event.type {
@@ -36,7 +37,6 @@ for try await event in voice.events {
     default: break
     }
 }
-voice.close()
 ```
 
 Always call `close()` when leaving a call, including on cancellation/error. The client
@@ -143,6 +143,8 @@ swift build -c release
 Tests cover the wire contract, actual local WebSocket framing, reconnects, cancellation,
 buffer limits, resampling, and interruption playback accounting. They do not use a mic
 or consume API credit. [Audio checks](docs/audio.md) require real hardware and explicit
-microphone access. A live service check is available with `dialt-diagnostics live`.
+microphone access. Live service checks are available with `dialt-diagnostics live`
+and `dialt-diagnostics live-voice synthetic-question.wav`. The latter uploads only the
+provided fixture; use synthetic speech asking “What is the diagnostic test colour?”.
 
 Licensed under Apache-2.0.
