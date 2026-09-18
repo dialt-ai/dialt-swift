@@ -41,7 +41,8 @@ disconnect; recovery keeps capture alive and never replays stale frames.
 
 ## Not yet validated
 
-- Human normal/soft near-end speech and double-talk during assistant playback.
+- Broader human normal/soft speech and double-talk coverage beyond the single guided
+  sentence check below.
 - Physical iPhone audio, Bluetooth/headphones, and the minimum supported OS releases.
 - Real permission denial, device hot-plug and iOS interruptions (their failure handling
   has component coverage, not physical-device certification).
@@ -50,3 +51,20 @@ disconnect; recovery keeps capture alive and never replays stale frames.
 These remain required before a production/stable release. This package is an alpha
 for foreground integrations. It does not claim background calling, transparent route
 recovery, or production acoustic certification.
+
+## Follow-up hardware checks, 2026-09-17
+
+A repeated four-take A/B run failed twice on its third take: CoreAudio stopped the new
+engine after a delayed I/O configuration change. Explicitly disabling voice processing
+on stop releases the old graph before a new call. With that fix, all four takes completed
+and the mean far-end attenuation was 27.4 dB. See [the follow-up numerical report](aec-followup.json).
+These separate runs have different acoustic levels and should not be treated as a
+controlled comparison of attenuation between SDK revisions.
+
+In a guided local check, the user spoke the same sentence twice (normal, then soft), first
+alone and then during speaker playback. Local faster-whisper `base.en` transcription
+recovered both complete repetitions in both clips. The initial guided take was inconclusive
+because its speaking cue could overlap the recording window; a repeat used clear end-of-cue
+instructions and retained continuous capture. This is evidence for one sentence on one Mac,
+not an ASR benchmark, a test of server-side interruption, or general double-talk certification.
+All speech inference ran locally; no microphone recordings were uploaded or committed.

@@ -161,7 +161,13 @@ import Foundation
         observers.removeAll()
         clearPlayback()
         if tapInstalled { engine.inputNode.removeTap(onBus: 0); tapInstalled = false }
-        engine.stop(); capture = nil; voiceProcessingEnabled = false
+        engine.stop()
+        // Release VPIO's aggregate device before another call creates its audio graph.
+        // Merely stopping rendering leaves it alive until this object is deallocated.
+        if voiceProcessingEnabled {
+            try? engine.inputNode.setVoiceProcessingEnabled(false)
+        }
+        capture = nil; voiceProcessingEnabled = false
         continuation.finish()
         #if os(iOS)
         if activatedAudioSession {

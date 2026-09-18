@@ -48,6 +48,10 @@ All artifacts are ignored by Git. No audio is uploaded by this command.
 `dialt-diagnostics audio-check` separately exercises live capture, paced muted silence,
 playback queue accounting, clearing playback and microphone shutdown. It uploads and
 saves no microphone audio.
+It runs three calls back-to-back to check release of Apple's voice-processing graph.
+Stopping a call disables voice processing after stopping the engine; leaving the graph
+alive until object deallocation reproduced a delayed CoreAudio reconfiguration that
+stopped the next call during initialization.
 
 ## Required device checks before a production release
 
