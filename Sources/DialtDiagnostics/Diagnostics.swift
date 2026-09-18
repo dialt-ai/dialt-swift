@@ -41,6 +41,12 @@ import AVFoundation
     }
 
     @MainActor static func audioCheck() async throws {
+        // Back-to-back calls exercise VPIO teardown as well as a single call's lifecycle.
+        for _ in 0..<3 { try await audioCheckOnce() }
+        print("PASS: three native AEC capture/mute/playback/clear/shutdown cycles.")
+    }
+
+    @MainActor static func audioCheckOnce() async throws {
         @MainActor final class CaptureCheck {
             var packets = 0
             var checkMute = false
@@ -76,7 +82,6 @@ import AVFoundation
         audio.stop()
         try await capture.value
         guard !audio.voiceProcessingEnabled else { throw DialtError("stop_failed", "Audio remained enabled after stop.") }
-        print("PASS: native AEC capture, paced mute, playback accounting, clear and microphone shutdown.")
     }
 
     @MainActor static func live(speech: Data? = nil) async throws {
