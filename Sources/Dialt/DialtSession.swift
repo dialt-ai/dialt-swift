@@ -123,6 +123,10 @@ import Foundation
                 try check(epoch)
                 if event.type == "ready" { throw DialtError("invalid_frame", "Unexpected second ready frame.") }
                 try emit(event)
+                if event.type == "session_end" {
+                    finish(error: nil)
+                    return
+                }
             } catch {
                 guard generation == epoch, state != .closed else { return }
                 if error is CancellationError { finish(error: nil); return }

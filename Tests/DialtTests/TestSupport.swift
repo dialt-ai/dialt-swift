@@ -41,6 +41,7 @@ import Testing
         try await Task.sleep(for: .milliseconds(5))
     }
     Issue.record("Condition was not reached within one second")
+    throw DialtError("test_timeout", "Condition was not reached within one second")
 }
 
 @MainActor final class FakeAudio: VoiceAudio {
