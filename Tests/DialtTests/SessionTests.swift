@@ -94,6 +94,30 @@ import Testing
         #expect(names == ["ready", "session_end"])
     }
 
+    @Test func explicitSessionEndStopsDispatchAndRejectsLateResults() async throws {
+        let wire = MockWire(); wire.ready()
+        var creations = 0
+        let session = DialtSession(configuration: .init(apiKey: "test"), factory: { _ in creations += 1; return wire })
+        defer { session.close() }
+        try await session.connect()
+        wire.push(["type": "tool_call", "id": "before", "name": "fixture", "args": [:]])
+        wire.push(["type": "session_end", "reason": "ended_by_model", "extra": "preserved"])
+        wire.push(["type": "tool_call", "id": "after", "name": "fixture", "args": [:]])
+        try await eventually { session.state == .closed }
+        var events: [DialtEvent] = []
+        for try await event in session.events { events.append(event) }
+        #expect(events.map(\.type) == ["ready", "tool_call", "session_end"])
+        #expect(events[1]["id"] == "before")
+        #expect(events.last?["extra"] == "preserved")
+        #expect(wire.closed)
+        #expect(creations == 1)
+        do {
+            try await session.sendToolResult(id: "before", content: [:])
+            Issue.record("A result after session_end must not be sent")
+        } catch let error as DialtError { #expect(error.code == "connection_closed") }
+        #expect(wire.frames.count == 1)
+    }
+
     @Test func rejectedResumeIsTerminal() async throws {
         let first = MockWire(); first.ready()
         let second = MockWire(); second.push(["type": "error", "code": "resume_failed", "detail": "expired"])

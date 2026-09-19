@@ -114,6 +114,21 @@ players must implement the documented `playback_stopped` contract; use
 `DialtVoiceClient` to get that automatically. `NativeAudioEngine` is also available
 independently for capture/playback and diagnostics.
 
+## Session termination
+
+`session_end` is terminal: no later event is delivered for that session, whether the
+SDK receives an explicit terminal frame or creates the event after a clean socket
+close. Earlier events retain their order. The voice client lets queued farewell audio
+drain before finishing its stream. Sending a tool result after the session has closed
+throws `connection_closed`; it is not sent or retried.
+
+Calling `close()` yourself cancels the session and does not synthesize `session_end`.
+An `AsyncThrowingStream` can still yield events buffered before local closure. Cancel
+your event-consumer task as part of teardown and check cancellation before dispatching
+work. Your application also owns cancellation of any tool tasks it already started.
+Both session and voice event buffers hold at most 256 events; overflow ends the call
+with `event_overflow` instead of silently dropping live protocol events.
+
 ## Recovery and limits
 
 - Abnormal transport loss resumes the same session when the server supplies a resume

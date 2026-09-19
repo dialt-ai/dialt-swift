@@ -107,6 +107,28 @@ struct PCMTests {
         #expect(second.frames.count == 1)
     }
 
+    @Test func explicitSessionEndIsLastVoiceEventAndDrainsFarewell() async throws {
+        let wire = MockWire(); wire.ready()
+        let audio = FakeAudio()
+        let client = DialtVoiceClient(configuration: .init(apiKey: "test"), audio: audio, factory: { _ in wire })
+        defer { client.close() }
+        try await client.connect()
+        wire.push(["type": "turn"])
+        wire.audio(Data([0, 0]))
+        wire.push(["type": "done"])
+        wire.push(["type": "tool_call", "id": "before", "name": "fixture", "args": [:]])
+        wire.push(["type": "session_end", "reason": "ended_by_model"])
+        wire.push(["type": "tool_call", "id": "after", "name": "fixture", "args": [:]])
+        try await eventually { client.session.state == .closed }
+        var events: [DialtEvent] = []
+        for try await event in client.events { events.append(event) }
+        #expect(events.map(\.type) == ["ready", "turn", "done", "tool_call", "session_end"])
+        #expect(events[3]["id"] == "before")
+        #expect(audio.played == [Data([0, 0])])
+        #expect(audio.clearCount == 0)
+        #expect(audio.stopped)
+    }
+
     @Test func cancellationClearsAndDeviceFailureClosesSession() async throws {
         let wire = MockWire(); wire.ready()
         let audio = FakeAudio()
